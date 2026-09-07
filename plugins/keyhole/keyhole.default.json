@@ -1,0 +1,20 @@
+{
+  "read_max_lines": 500,
+  "read_allow": [
+    "**/CLAUDE.md",
+    "**/AGENTS.md",
+    "**/README.md",
+    "**/.claude/state/*.md"
+  ],
+  "bash_max_lines": 500,
+  "screenshot_tools": [
+    "mcp__Claude_Browser__computer",
+    "mcp__claude-in-chrome__computer",
+    "mcp__Claude_Preview__preview_screenshot"
+  ],
+  "batch_tools": [
+    "mcp__Claude_Browser__browser_batch",
+    "mcp__claude-in-chrome__browser_batch"
+  ],
+  "batch_max_screenshots": 1
+}

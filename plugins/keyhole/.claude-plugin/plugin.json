@@ -1,0 +1,9 @@
+{
+  "name": "keyhole",
+  "description": "Keeps the context window honest: refuses unbounded reads, grep dumps and unscaled screenshots, and carries explicit task state across /clear. Enforcement rather than advice.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sergey Tomashevsky"
+  },
+  "keywords": ["context", "token-optimization", "hooks", "long-horizon"]
+}

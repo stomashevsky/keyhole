@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "keyhole",
+  "version": "0.1.0",
+  "description": "Context discipline for Claude Code: enforce narrow reads, keep task state explicit.",
+  "owner": {
+    "name": "Sergey Tomashevsky"
+  },
+  "plugins": [
+    {
+      "name": "keyhole",
+      "description": "Refuses unbounded reads, grep dumps and unscaled screenshots; carries explicit task state across /clear.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Sergey Tomashevsky"
+      },
+      "source": "./plugins/keyhole",
+      "category": "developer-tools"
+    }
+  ]
+}
