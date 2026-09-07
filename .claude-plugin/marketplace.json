@@ -15,7 +15,10 @@
         "name": "Sergey Tomashevsky"
       },
       "source": "./plugins/keyhole",
-      "category": "developer-tools"
+      "category": "developer-tools",
+      "homepage": "https://github.com/stomashevsky/keyhole",
+      "repository": "https://github.com/stomashevsky/keyhole",
+      "license": "MIT"
     }
   ]
 }

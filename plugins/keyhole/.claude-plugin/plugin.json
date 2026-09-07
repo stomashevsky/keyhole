@@ -5,5 +5,13 @@
   "author": {
     "name": "Sergey Tomashevsky"
   },
-  "keywords": ["context", "token-optimization", "hooks", "long-horizon"]
+  "keywords": [
+    "context",
+    "token-optimization",
+    "hooks",
+    "long-horizon"
+  ],
+  "homepage": "https://github.com/stomashevsky/keyhole",
+  "repository": "https://github.com/stomashevsky/keyhole",
+  "license": "MIT"
 }
