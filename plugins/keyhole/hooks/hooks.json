@@ -2,11 +2,12 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash|computer|browser_batch|screenshot",
+        "matcher": "Read|Bash|exec_command|shell_command|computer|browser_batch|screenshot|mcp__cua_repl",
         "hooks": [
           {
             "type": "command",
-            "command": "command -v python3 >/dev/null 2>&1 && python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\" || exit 0"
+            "command": "command -v python3 >/dev/null 2>&1 && python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\" || exit 0",
+            "timeout": 10
           }
         ]
       }
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/state-inject.sh\""
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/state-inject.sh\"",
+            "timeout": 10
           }
         ]
       }

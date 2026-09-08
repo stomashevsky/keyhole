@@ -1,7 +1,7 @@
 {
   "name": "keyhole",
-  "description": "Keeps the context window honest: refuses unbounded reads, grep dumps and unscaled screenshots, and carries explicit task state across /clear. Enforcement rather than advice.",
-  "version": "0.1.0",
+  "description": "Local context discipline for Claude Code and Codex: narrow tool output, share task state and measure transcripts.",
+  "version": "0.2.0",
   "author": {
     "name": "Sergey Tomashevsky"
   },

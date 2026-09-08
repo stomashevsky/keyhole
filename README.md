@@ -1,137 +1,178 @@
 # keyhole
 
-A Claude Code plugin that keeps the context window honest. It refuses unbounded
-reads, grep dumps and unscaled screenshots, and carries explicit task state
-across `/clear`.
+Context discipline for **Claude Code and Codex**. Narrow expensive tool output,
+keep small task state outside the transcript, and measure what actually entered
+the conversation. Everything runs locally: no model calls or external service.
 
-Nothing leaves your machine. No service, no account, no second model — the
-plugin only refuses an expensive action and names the cheaper form of the same
-thing.
+## Install / update
 
-## Install
+Claude Code:
 
-```bash
-claude plugin marketplace add stomashevsky/keyhole && claude plugin install keyhole@keyhole
-```
+~~~bash
+claude plugin marketplace add stomashevsky/keyhole
+claude plugin install keyhole@keyhole
+# Later:
+claude plugin marketplace update keyhole
+claude plugin update keyhole@keyhole
+~~~
 
-Restart Claude Code. That is the whole setup — there is nothing to configure
-before it works.
+Codex:
 
-### Check it works
+~~~bash
+codex plugin marketplace add https://github.com/stomashevsky/keyhole.git
+codex plugin add keyhole@keyhole
+# Later:
+codex plugin marketplace upgrade keyhole
+codex plugin add keyhole@keyhole
+~~~
 
-Ask Claude to `grep -rn something .` in any repository. You should see the call
-refused with a line telling it to add `| head -20`. If you see that, you are
-done.
+Both manifests use the same skills, scripts and hooks. Review the two Keyhole
+definitions in Codex CLI's /hooks menu after installation or an update. Installing
+a plugin does not trust its hooks. Start a fresh session to load the new version.
 
-## What it does
+## Measure first
 
-**Refuses a read with no shape.** `Read` with no `offset`/`limit` on a file over
-500 lines, `grep`/`rg` with no limiter, `cat` of a large file. The refusal names
-the cheaper form: a bounded read, `| head -20`, `-m 20`, `-c`.
+Use Claude's /keyhole:report, or select Keyhole's report skill in Codex.
+The script also works directly from this checkout:
 
-**Refuses an unnamed screenshot.** `screenshot` with no `scale`, and more than
-one frame in a single `browser_batch`. `scale: 0.5` is a quarter of the image
-tokens; `zoom` reads fine detail at full resolution; `read_page` answers
-questions about text for almost nothing.
+~~~bash
+python3 plugins/keyhole/tools/report.py --project /path/to/repo --agent both
+python3 plugins/keyhole/tools/report.py --agent codex -n 5 --project /path/to/repo
+python3 plugins/keyhole/tools/report.py /path/to/session.jsonl --json --output /tmp/keyhole-report.json
+~~~
 
-**Carries task state.** The `state` skill maintains `.claude/state/CURRENT.md`
-under a five-field schema, and a `SessionStart` hook feeds it back at the start
-of every session — so `/clear` costs nothing and resuming needs no scrollback.
+-n selects the largest N sessions **per agent**. Automatic discovery covers Claude
+project JSONL files and Codex session JSONL files, filtering by project metadata.
+Explicit file arguments are useful for exported or older transcripts.
 
-**Measures.** `/keyhole:report` shows where this project's context actually goes,
-by tool and by command, read from your own session transcripts.
+The report separates:
+- Estimated **text** tokens of tool results (chars/4), by tool.
+- Image counts, never base64 bytes divided by four. It does not guess image pricing.
+- Actual usage fields recorded by each host. Codex input includes cached input;
+  the cached counter is a subset, not an additional cost. Claude fields retain
+  their original meanings. Totals from the two hosts are not merged.
+- Calls the current guard would narrow, using the guard's actual policy.
+- Truncated results, malformed lines, unmatched outputs and opaque code-mode calls.
 
-Every refusal is one parameter away from proceeding, and that is the design. The
-guard cannot know whether you need the whole file or the full frame; it can make
-sure that when you take one, you chose it.
+Reported usage includes repeated context input; tool-result size does not.
+Would-narrow counts are **not predicted savings**: the follow-up read and the
+rejected round trip also cost tokens. File checks replay against current files,
+not historical snapshots. Code-mode calls are attributed to the outer wrapper;
+the report does not pretend to know which nested call produced each output.
+When the journal includes native Codex command-completion events, a separate
+diagnostic table groups their output by executable. Those sizes overlap wrapper
+results and are never added to the model-visible total; arguments are not exposed.
+Partial active JSONL files are tolerated and reported. Transcript formats are
+not a stable API; unsupported records cannot be measured as tool calls.
 
-## Where the idea comes from
+Save a baseline, then compare comparable completed tasks after enabling the guard.
+Do not claim a percentage improvement from a syntactic match count.
 
-**Enforcement rather than advice.** Spotify published
-[`shunt`](https://github.com/spotify/portal-ai-plugins) in September 2026 after
-routing rules written into `CLAUDE.md` were ignored by the model: *"The rules
-were advisory, not enforced."* A `PreToolUse` hook was what held. keyhole borrows
-that shape and only that. `shunt` forwards the blocked work to a cheaper model
-through Spotify's Portal, so file contents leave the machine and the plugin does
-nothing without a Portal instance. keyhole forwards nothing.
+## What the guard checks
 
-**Noise costs accuracy, not just money.**
-[SKILL.state](https://arxiv.org/abs/2608.26263) measured an append-only runtime
-falling from 0.68 to 0.53 task score as distractor events per turn rose from 5 to
-50, while runtimes that keep distractors out of the next prompt held 0.97 or
-better. It also measured what history does to cost: at the longest horizon
-tested, 1,062,387 tokens for a history-carrying baseline against 65,408 for the
-state-carrying one, at equal or better accuracy — and recovering the thread after
-losing context took 5-8 steps against 0. The guard keeps the distractors out; the
-`state` skill is the other half.
+| Call | Narrower form |
+|---|---|
+| Unbounded Read of a file over 500 lines | offset/limit; explicitly name a whole-file limit when needed |
+| grep/rg without a limiter | pipe to head, or use -m, -c, -l, -q |
+| cat/less/more of more than 500 lines total | sed -n 'START,ENDp' or head |
+| Claude screenshot with no scale | scale=0.5; scale=1 for chosen full detail |
+| Multiple frames in a browser batch | One frame; inspect intermediate DOM/accessibility |
+| Direct CUA .screenshot() with no frame choice | .screenshot({clip: ...}) or .screenshot({fullPage: false}) |
 
-## Measure before you tune
+Codex canonical Bash and native exec_command/cmd events are recognized.
+An explicit positive max_output_tokens budget also counts as a bounded native
+Codex shell call when that field is present in the hook input. Hosts that normalize
+it away still use the command's own limiter.
+CUA's screenshot options are clip and fullPage, **not scale**. Named option
+variables also count as an explicit choice. Plain string/comment examples of
+.screenshot() do not trigger the CUA rule.
 
-```bash
-/keyhole:report
-```
+The guard is a sieve, not a security boundary. It does not understand dynamic
+JavaScript calls, aliases, loop counts, arbitrary shell programs, or opaque
+code-mode wrappers. Shell inspection is limited to the final pipeline stage;
+heredocs are left alone. Unknown/malformed inputs and internal failures allow
+the operation. Missing Python also leaves the host usable.
 
-Two passes over the same repository disagreed about which tool was the problem,
-and the reason was the unit:
+A refusal asks for a deliberate narrower call. Whole files and full frames remain
+available when explicitly chosen. The host's own safety/permission rules always
+apply independently.
 
-- **Count tokens, never bytes.** An image costs roughly its pixels / 750, not its
-  base64 length / 4. Counting bytes overstated screenshots by about 2x and
-  produced a confident, wrong conclusion about which rule mattered most.
-- **The mix is per project and per phase.** On one visual UI project the three
-  buckets — Bash, Read, browser frames — came out near 28% each, and the guard's
-  rules covered about 30% of all tool output. A backend project will not look
-  like that. Measure yours before changing a threshold.
+## Shared task state
 
-## Configure
+The state skill keeps five short fields: Goal, Step, Decisions, Files, Open.
+Use the session path shown by SessionStart, or locate it explicitly:
 
-Nothing is required. When you do want to change something, later sources win:
+~~~bash
+python3 plugins/keyhole/tools/state.py path --session SESSION_ID --project /path/to/repo
+python3 plugins/keyhole/tools/state.py path --task named-handoff --project /path/to/repo
+~~~
 
-1. `plugins/keyhole/keyhole.default.json` — shipped defaults
-2. `<your project>/.claude/keyhole.json` — per project
-3. Environment: `KEYHOLE=off`, `KEYHOLE_READ_MAX_LINES`, `KEYHOLE_BASH_MAX_LINES`,
-   `KEYHOLE_MAX_SCREENSHOTS`
+The default is .agents/keyhole/state/<session-or-task>.md. The command only returns
+a path; the agent writes the state with its normal file editor. Hooks never create
+state, overwrite decisions, or start work.
 
-| Key | Default | Meaning |
-|---|---|---|
-| `read_max_lines` | 500 | Unbounded `Read` above this many lines is refused |
-| `read_allow` | CLAUDE.md, AGENTS.md, README.md, state files | Globs always read whole |
-| `bash_max_lines` | 500 | `cat`/`less`/`more` above this many lines is refused |
-| `screenshot_tools` | browser + chrome `computer` | Tools whose `screenshot` needs a `scale` |
-| `batch_tools` | `browser_batch` | Tools whose action list is inspected |
-| `batch_max_screenshots` | 1 | Frames allowed in one batch |
+SessionStart loads, in order:
+1. This session's state, when present.
+2. Explicit state_files from project configuration.
+3. A deliberate shared .agents/keyhole/CURRENT.md handoff.
+4. Legacy .claude/state/CURRENT.md, for existing Claude users.
 
-The per-project layer is the point of the split. If your project's own
-instructions require reading a particular document whole, name it there:
+A new session otherwise gets a short index of up to five saved tasks, **not another
+session's working state**. Read only the entry that matches the user's request.
+For an explicit transfer to another agent, name the shared task file in the request.
+An opt-in CURRENT.md is suitable only for one coordinated active task.
 
-```json
+Keep real task plans and statuses in the project's existing canonical documents;
+the state file carries pointers and the immediate next step, not a duplicate plan.
+Choose whether to version state or ignore it according to project policy. Do not
+put credentials in it. State is bounded to 4,000 characters at injection.
+
+## Configuration
+
+Sources, later winning:
+1. Shipped keyhole.default.json.
+2. <git-root>/.claude/keyhole.json (legacy).
+3. <git-root>/.agents/keyhole.json (shared).
+4. KEYHOLE_READ_MAX_LINES, KEYHOLE_BASH_MAX_LINES, KEYHOLE_MAX_SCREENSHOTS.
+
+The git root is found from the hook's cwd, including subdirectory sessions.
+KEYHOLE=off disables Keyhole only; it does not affect host permissions.
+
+~~~json
 {
-  "read_allow": ["**/CLAUDE.md", "**/AGENTS.md", "**/docs/spec-*.md"]
+  "read_allow": ["**/CLAUDE.md", "**/AGENTS.md", "**/README.md", "**/docs/spec-*.md"],
+  "read_max_lines": 500,
+  "bash_max_lines": 500,
+  "batch_max_screenshots": 1,
+  "state_max_chars": 4000,
+  "state_dir": ".agents/keyhole/state",
+  "state_files": []
 }
-```
+~~~
 
-## Known limits, stated plainly
+Arrays replace earlier arrays. state_files and state_dir must resolve inside the
+project. Existing Claude project overrides remain supported.
 
-- **It is a sieve, not a wall.** `limit: 100000` and `scale: 1` pass by design. As
-  a security control this is nothing; as a discipline it works.
-- **It costs round trips.** A refusal spends one exchange. Run `/keyhole:report`
-  on your own transcripts and loosen the thresholds if the measured saving does
-  not pay for that.
-- **The bash check reads only the last stage of each segment.** `sed`, `awk` and
-  `python -c` are not inspected. Deliberate: over-blocking is worse than
-  under-blocking, because a guard that fires wrongly gets switched off and then
-  protects nothing.
-- **Needs `python3` on PATH.** Without it the hook exits quietly and allows
-  everything, so nothing breaks — the guard simply does not run.
+## Verify
 
-## Develop
-
-```bash
-python3 plugins/keyhole/tests/guard.test.py   # 38 contract cases
+~~~bash
+python3 plugins/keyhole/tests/guard.test.py
+python3 -m unittest discover -s plugins/keyhole/tests -p 'test_*.py'
 claude plugin validate ./plugins/keyhole
-claude --plugin-dir ./plugins/keyhole         # load a working copy
-```
+~~~
 
-Half the test cases assert that the guard stays quiet: `npm`, `git`, `sed -n`,
-heredocs, `zoom`, redirects, unrelated tools, malformed input.
+Tests cover the original 38 Claude contracts, Codex event shapes, shared config,
+CUA frames, both transcript formats, cumulative usage, partial records, state
+isolation and compatibility. They do not simulate a model or assert a savings rate.
+
+## Background
+
+Inspired by local PreToolUse enforcement in
+[Spotify's shunt](https://github.com/spotify/portal-ai-plugins) and explicit state
+in [SKILL.state](https://arxiv.org/abs/2608.26263). Results from those systems are
+not measured outcomes for Keyhole.
+
+Host interfaces: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
+[Claude hooks](https://code.claude.com/docs/en/hooks).
 
 MIT licensed.

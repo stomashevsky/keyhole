@@ -1,0 +1,19 @@
+{
+  "name": "keyhole",
+  "version": "0.2.0",
+  "description": "Local context discipline for Claude Code and Codex: narrow tool output, share task state and measure transcripts.",
+  "author": { "name": "Sergey Tomashevsky" },
+  "homepage": "https://github.com/stomashevsky/keyhole",
+  "repository": "https://github.com/stomashevsky/keyhole",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Keyhole",
+    "shortDescription": "Context discipline for Claude Code and Codex",
+    "longDescription": "Measure local session transcripts, narrow expensive tool output, and keep concise shared task state across sessions.",
+    "developerName": "Sergey Tomashevsky",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Measure this project's context use with Keyhole.", "Save a concise task handoff with Keyhole."]
+  }
+}

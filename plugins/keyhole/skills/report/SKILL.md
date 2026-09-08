@@ -1,32 +1,31 @@
 ---
 name: report
-description: "Measure where this project's context actually goes, by tool and by command, from the session transcripts. Use before changing any context-saving setting, or when the user asks what is eating the context window."
+description: "Measure Claude and Codex session output and recorded usage before tuning Keyhole. Use when investigating context growth, expensive tool output, or the guard's effectiveness."
 ---
 
-# Where the context actually goes
+# Measure context use
 
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/tools/report.py"            # this project, 5 largest sessions
-python3 "${CLAUDE_PLUGIN_ROOT}/tools/report.py" -n 20      # twenty
-python3 "${CLAUDE_PLUGIN_ROOT}/tools/report.py" file.jsonl # specific sessions
-```
+Run [report.py](../../tools/report.py) from this plugin's root. Resolve the root
+from this SKILL.md's real location (two parent directories), not from a guessed
+CLAUDE_PLUGIN_ROOT variable in the shell.
 
-Reads `~/.claude/projects/<project>/*.jsonl`, joins each `tool_use` to its
-`tool_result`, and reports estimated tokens by tool, the most expensive Bash
-commands, the heaviest unbounded reads, and what the guard would have refused.
+~~~bash
+python3 "<plugin-root>/tools/report.py" --project "<repository>" --agent both
+python3 "<plugin-root>/tools/report.py" --project "<repository>" --agent codex -n 5
+python3 "<plugin-root>/tools/report.py" "<session.jsonl>" --json --output /tmp/keyhole-report.json
+~~~
 
-## Read the output, then change the setting
+Use the actual project path. Default discovery selects the largest five sessions
+per agent. Reports stay local; do not upload session transcripts or report artifacts.
 
-Run this before tuning `keyhole.json`. Two measurements of the same repository
-disagreed about which tool was the problem, and the reason was the unit:
+Keep these distinctions in the answer:
+- Tool text sizes are chars/4 estimates; images are separate counts.
+- Recorded usage includes repeated context. Cached input is not additional Codex
+  input; retain each host's field meanings rather than combining them.
+- Would-narrow counts replay the same policy as the guard, against current files.
+  They are not avoided tokens or a savings percentage.
+- Code-mode results belong to the outer wrapper. Do not attribute them to guessed
+  inner tools. Report malformed records, missing pairs or unsupported formats.
 
-- **Count tokens, never bytes.** An image costs roughly its pixels / 750, not
-  its base64 length / 4. Counting bytes overstated screenshots by about 2x and
-  produced a confident, wrong conclusion about which rule mattered most.
-- **The mix is per project and per phase.** In a visual UI project the three
-  buckets — Bash, Read, browser frames — came out near 28% each. A backend
-  session will not look like that. Measure yours.
-
-The last section, "what the guard would have refused", is the honest estimate of
-what the plugin buys on this project's own history. If it is small, loosen the
-thresholds; the guard has a cost in round trips, and it should earn it.
+Compare comparable completed tasks, including the cost of guard refusals and
+follow-up reads. Do not change thresholds solely because a command has no limiter.

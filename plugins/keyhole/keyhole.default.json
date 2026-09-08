@@ -4,7 +4,9 @@
     "**/CLAUDE.md",
     "**/AGENTS.md",
     "**/README.md",
-    "**/.claude/state/*.md"
+    "**/.claude/state/*.md",
+    "**/.agents/keyhole/state/*.md",
+    "**/.agents/keyhole/CURRENT.md"
   ],
   "bash_max_lines": 500,
   "screenshot_tools": [
@@ -16,5 +18,8 @@
     "mcp__Claude_Browser__browser_batch",
     "mcp__claude-in-chrome__browser_batch"
   ],
-  "batch_max_screenshots": 1
+  "batch_max_screenshots": 1,
+  "cua_tools": ["mcp__cua_repl__js", "mcp__cua_repl.js"],
+  "state_max_chars": 4000,
+  "state_files": []
 }
