@@ -70,6 +70,20 @@ Do not claim a percentage improvement from a syntactic match count.
 
 ## Read a session
 
+In plain words: Claude and Codex keep a diary of every session. What you asked, what
+they thought, every command they ran and everything it returned. They write it as files
+meant for machines, which nobody can read. This turns one session into a page you can read:
+
+~~~bash
+python3 plugins/keyhole/tools/view.py --project /path/to/repo -n 1 --output ~/session.html
+open ~/session.html
+~~~
+
+Open it in a real browser. An editor or chat preview shows the file as a snapshot, so
+the text is there but the buttons do nothing. On the page, the checkboxes at the top
+hide the kinds of events you are not after, the box beside them filters by text and
+counts what is left, and long output stays folded until you click it.
+
 The report says what a session cost. This says what happened in it. `view.py` turns
 Claude and Codex journals into one offline HTML page: prompts, thinking, tool calls
 and their output in order, for either host.
