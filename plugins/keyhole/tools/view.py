@@ -75,7 +75,8 @@ h2 { font-size:14px; margin:28px 0 2px; }
 .warn { margin:0 0 10px; color:var(--dim); max-width:80ch; }
 .filters { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; }
 .filters label { cursor:pointer; user-select:none; }
-input[type=search] { flex:1 1 220px; min-width:180px; padding:5px 8px;
+#fold { margin-left:auto; }
+input[type=search] { flex:1 1 200px; min-width:160px; max-width:320px; padding:5px 8px;
   border-radius:var(--radius-sm);
   border:1px solid var(--line); background:var(--card); color:inherit; font:inherit; }
 button { cursor:pointer; padding:5px 10px; border-radius:var(--radius-sm);
@@ -118,11 +119,22 @@ function apply() {
   }
   count.textContent = shown + ' shown';
 }
-function fold(open) { for (const d of document.querySelectorAll('details')) d.open = open; }
+const folder = document.getElementById('fold');
+function fold() {
+  const folds = [...document.querySelectorAll('details')];
+  const open = folds.some(d => !d.open);  // anything still closed means the click opens
+  folds.forEach(d => { d.open = open; });
+  label(!open);
+}
+function label(closed) { folder.textContent = closed ? 'expand all' : 'collapse all'; }
 box.addEventListener('input', apply);
 for (const b of boxes) b.addEventListener('change', apply);
-document.getElementById('expand').addEventListener('click', () => fold(true));
-document.getElementById('collapse').addEventListener('click', () => fold(false));
+folder.addEventListener('click', fold);
+document.addEventListener('toggle', event => {
+  if (event.target.tagName === 'DETAILS') {
+    label([...document.querySelectorAll('details')].some(d => !d.open));
+  }
+}, true);  // toggle does not bubble, so listen on the way down
 apply();
 """
 
@@ -244,12 +256,12 @@ def document(items, limit, framed=False):
     if not framed:
         yield ('<p class="warn">Everything the agent read and wrote is on this page, including '
                "secrets that appeared in tool output. It is a local file: keep it local.</p>\n")
-    yield '<div class="filters">'
+    yield ('<div class="filters">'
+           '<input type="search" id="q" placeholder="filter text">')
     for kind in KINDS:
         checked = "" if kind in ("system", "meta") else " checked"
         yield (f'<label><input type="checkbox" value="{kind}"{checked}> {kind}</label>')
-    yield ('<input type="search" id="q" placeholder="filter text">'
-           '<button id="expand">expand all</button><button id="collapse">collapse all</button>'
+    yield ('<button id="fold">expand all</button>'
            '<span id="count"></span></div></header>\n')
     if not framed:
         yield "<nav><ol>"
