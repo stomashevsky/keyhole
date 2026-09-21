@@ -1,6 +1,6 @@
 {
   "name": "keyhole",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local context discipline for Claude Code and Codex: narrow tool output, share task state and measure transcripts.",
   "author": { "name": "Sergey Tomashevsky" },
   "homepage": "https://github.com/stomashevsky/keyhole",
