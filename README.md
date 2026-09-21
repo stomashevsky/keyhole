@@ -72,27 +72,34 @@ Do not claim a percentage improvement from a syntactic match count.
 
 In plain words: Claude and Codex keep a diary of every session. What you asked, what
 they thought, every command they ran and everything it returned. They write it as files
-meant for machines, which nobody can read. This turns one session into a page you can read:
+meant for machines, which nobody can read. This turns those sessions into pages you can read:
 
 ~~~bash
-python3 plugins/keyhole/tools/view.py --project /path/to/repo -n 1 --output ~/session.html
-open ~/session.html
+python3 plugins/keyhole/tools/view.py --serve --open --project /path/to/repo
 ~~~
 
-That takes the newest session for the repository. If you will do this more than once, put
-a function in your shell profile and it becomes one word in any repository:
+That opens a small page served from your own machine: the sessions for that repository
+are listed down the left, and clicking one shows it beside the list. The list stays where
+it is, so you can move between sessions without scrolling back to anything. A session is
+built when you ask for it, not in advance, so a large one costs nothing until you open it.
+Stop the server with Ctrl-C when you are done.
+
+If you will do this more than once, put a function in your shell profile and it becomes
+one word in any repository:
 
 ~~~zsh
-kh() { python3 /path/to/keyhole/plugins/keyhole/tools/view.py --pick --open --project "${1:-$PWD}"; }
+kh() { python3 /path/to/keyhole/plugins/keyhole/tools/view.py --serve --open --project "${1:-$PWD}"; }
 ~~~
 
-`kh` lists the recent sessions for the repository you are standing in, waits for a number,
-and opens that one in your browser. Nothing to copy, nothing to paste.
+Prefer a file to a server? `--pick` lists the sessions, waits for a number, and writes
+that one out as a single HTML file you can keep or move.
 
 Open it in a real browser. An editor or chat preview shows the file as a snapshot, so
 the text is there but the buttons do nothing. On the page, the checkboxes at the top
 hide the kinds of events you are not after, the box beside them filters by text and
-counts what is left, and long output stays folded until you click it.
+counts what is left, and long output stays folded until you click it. Hook output, MCP
+status and compaction notices are there under `system`, unchecked at first so a session
+opens on what you said rather than on its own plumbing.
 
 The report says what a session cost. This says what happened in it. `view.py` turns
 Claude and Codex journals into one offline HTML page: prompts, thinking, tool calls
@@ -105,11 +112,16 @@ python3 plugins/keyhole/tools/view.py /path/to/session.jsonl --max-chars 0
 ~~~
 
 `--project` decides which sessions count: those whose working directory sits under that
-path, in either host's journals. `-n` takes that many per agent, newest first; `--largest`
-ranks by size the way the report does; `--list` prints the candidates instead of building
-a page; `--pick` prints them and opens the one you answer with; `--open` launches the
-finished page in your browser. A session is named by the first thing you typed in it, or by the slash command you
-ran, both in the listing and in the page's index.
+path, in either host's journals. `-n` takes that many per agent, newest first (twenty when
+serving); `--largest` ranks by size the way the report does; `--list` prints the candidates
+instead of building a page; `--pick` prints them and opens the one you answer with;
+`--open` launches the result in your browser. A session is named by the first thing you
+typed in it, or by the slash command you ran, in the listing and on the page.
+
+`--serve` runs the picker instead of writing a file: a read-only server bound to
+127.0.0.1, on a free port unless `--port` says otherwise. It re-reads the journals on
+every load, so a session you are running right now appears in the list and grows as you
+reload it. It serves only the sessions it discovered, by name, and writes nothing.
 
 The page has checkboxes per event kind, a text filter with a match count, folded long
 bodies and a dark theme. It is a single file with no scripts from anywhere else and no

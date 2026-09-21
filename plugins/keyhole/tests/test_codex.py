@@ -376,5 +376,21 @@ class ViewTests(Fixture):
         self.assertIn("почини тесты",page)
 
 
+    def test_server_routes_index_and_sessions_by_name(self):
+        path=self.jsonl([{"uuid":"a","message":{"role":"user","content":"привет"}}])
+        items=[view.describe(path)]
+        status,body=view.route("/",items,200)
+        self.assertEqual(status,200)
+        self.assertIn("привет",body)
+        self.assertIn(f'/s/{path.name}',body)
+        self.assertIn("<iframe",body)
+        status,body=view.route(f"/s/{path.name}",items,200)
+        self.assertEqual(status,200)
+        self.assertIn("&larr; sessions",body)
+        self.assertNotIn("<nav>",body)  # the picker holds the list; the frame does not repeat it
+        for unknown in ("/s/../../etc/passwd","/s/%2e%2e%2fsecrets.jsonl","/s/absent.jsonl","/x"):
+            self.assertEqual(view.route(unknown,items,200)[0],404,unknown)
+
+
 if __name__ == "__main__":
     unittest.main()

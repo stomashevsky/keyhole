@@ -539,5 +539,5 @@ def first_prompt(path, limit=200):
                 continue
             if line.startswith(SKILL_BODY):
                 break
-            return line
+            return f"{command} · {line}" if command else line
     return command

@@ -3,15 +3,49 @@
 
 import argparse
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import html
 from pathlib import Path
 import sys
 import tempfile
+from urllib.parse import quote, unquote
 import webbrowser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import project_root
 from transcripts import discover, events, first_prompt, transcript_agent, transcript_cwd
+
+PICKER = """
+html, body { height:100%; }
+body { margin:0; padding:0; display:flex; }
+aside { width:300px; flex:none; height:100vh; overflow:auto; border-right:1px solid var(--line);
+  background:var(--card); padding:10px 10px 24px; }
+aside h1 { font-size:13px; margin:2px 2px 8px; color:var(--dim); font-weight:600; }
+aside input[type=search] { width:100%; margin:0 0 8px; }
+.row { display:block; padding:6px 8px; border-radius:6px; text-decoration:none; color:inherit;
+  cursor:pointer; }
+.row:hover { background:var(--bg); }
+.row.on { background:var(--bg); box-shadow:inset 2px 0 0 var(--accent); }
+.row b { display:block; font-weight:500; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; }
+.row span { color:var(--dim); font-size:12px; }
+aside p { color:var(--dim); font-size:12px; margin:12px 2px 0; }
+iframe { flex:1; height:100vh; border:0; background:var(--bg); }
+@media (max-width:720px) { body { display:block; }
+  aside { width:auto; height:42vh; border-right:0; border-bottom:1px solid var(--line); }
+  iframe { height:58vh; width:100%; } }
+"""
+
+PICK_SCRIPT = """
+const rows = [...document.querySelectorAll('.row')];
+rows.forEach(row => row.addEventListener('click', () => {
+  rows.forEach(other => other.classList.toggle('on', other === row));
+}));
+document.getElementById('find').addEventListener('input', event => {
+  const needle = event.target.value.toLowerCase();
+  rows.forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(needle); });
+});
+"""
 
 KINDS = ["user", "assistant", "thinking", "tool_use", "tool_result", "system", "meta"]
 FOLD = 800  # Longer bodies open on demand rather than filling the page.
@@ -38,6 +72,7 @@ button { cursor:pointer; padding:5px 10px; border-radius:6px; border:1px solid v
 nav ol { margin:14px 0 0; padding-left:20px; color:var(--dim); }
 nav a { color:inherit; }
 .prompt { margin:2px 0 0; }
+.back { display:inline-block; margin-right:10px; }
 .src { color:var(--dim); font-size:12px; word-break:break-all; }
 .ev { border-left:3px solid var(--line); background:var(--card); border-radius:0 6px 6px 0;
   margin:6px 0; padding:6px 10px; }
@@ -186,25 +221,34 @@ def session_html(item, limit):
     yield f'<p class="stats">{html.escape(summary)} &middot; {chars:,} chars of text</p>\n'
 
 
-def document(items, limit):
+def document(items, limit, back=None):
+    """One page of sessions. `back` means the picker frames this page: it already carries the
+    warning and the list, so neither is repeated here and the header stays one line."""
+    title = html.escape(items[0]["prompt"][:80]) or "Session" if back else "Keyhole session view"
     yield ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n"
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
            f"<title>Keyhole: {len(items)} sessions</title>\n<style>{STYLE}</style>\n"
-           "</head><body>\n<header><h1>Keyhole session view</h1>\n"
-           '<p class="warn">Everything the agent read and wrote is on this page, including '
-           "secrets that appeared in tool output. It is a local file: keep it local.</p>\n"
-           '<div class="filters">')
+           "</head><body>\n<header><h1>"
+           + (f'<a class="back" href="{back}" target="_top">&larr; sessions</a>' if back else "")
+           + title + "</h1>\n")
+    if not back:
+        yield ('<p class="warn">Everything the agent read and wrote is on this page, including '
+               "secrets that appeared in tool output. It is a local file: keep it local.</p>\n")
+    yield '<div class="filters">'
     for kind in KINDS:
-        checked = "" if kind == "meta" else " checked"
+        checked = "" if kind in ("system", "meta") else " checked"
         yield (f'<label><input type="checkbox" value="{kind}"{checked}> {kind}</label>')
     yield ('<input type="search" id="q" placeholder="filter text">'
            '<button id="expand">expand all</button><button id="collapse">collapse all</button>'
-           '<span id="count"></span></div></header>\n<nav><ol>')
-    for number, item in enumerate(items):
-        label = " &middot; ".join(html.escape(part) for part in
-                                  (item["agent"], item["when"], item["prompt"][:70]) if part)
-        yield f'<li><a href="#s{number}">{label}</a></li>'
-    yield "</ol></nav>\n<main>\n"
+           '<span id="count"></span></div></header>\n')
+    if not back:
+        yield "<nav><ol>"
+        for number, item in enumerate(items):
+            label = " &middot; ".join(html.escape(part) for part in
+                                      (item["agent"], item["when"], item["prompt"][:70]) if part)
+            yield f'<li><a href="#s{number}">{label}</a></li>'
+        yield "</ol></nav>\n"
+    yield "<main>\n"
     for number, item in enumerate(items):
         yield f'<section id="s{number}">\n'
         yield from session_html(item, limit)
@@ -212,12 +256,77 @@ def document(items, limit):
     yield f"</main>\n<script>{SCRIPT}</script>\n</body></html>\n"
 
 
+def index_html(items):
+    """The picker: the list stays on the left, the session opens beside it."""
+    first = f'/s/{quote(items[0]["path"].name)}' if items else "about:blank"
+    yield ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n"
+           "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+           f"<title>Keyhole: {len(items)} sessions</title>\n<style>{STYLE}{PICKER}</style>\n"
+           "</head><body>\n<aside>\n"
+           f"<h1>{len(items)} sessions</h1>\n"
+           '<input id="find" type="search" placeholder="filter sessions">\n')
+    for position, item in enumerate(items):
+        line = " &middot; ".join(html.escape(str(part)) for part in
+                                 (item["agent"], item["when"], bytes_label(item["bytes"])) if part)
+        yield (f'<a class="row{" on" if not position else ""}' 
+               f'" href="/s/{quote(item["path"].name)}" target="view">'
+               f'<b>{html.escape(item["prompt"][:120]) or "(no prompt)"}</b><span>{line}</span></a>\n')
+    yield ("<p>Full transcript text, including secrets from tool output. "
+           "This server listens on your machine only.</p>\n</aside>\n"
+           f'<iframe name="view" src="{first}"></iframe>\n'
+           f"<script>{PICK_SCRIPT}</script>\n</body></html>\n")
+
+
+def route(path, items, limit):
+    """Map a request to a page. Sessions are matched by name against the discovered set."""
+    if path == "/":
+        return 200, "".join(index_html(items))
+    if path.startswith("/s/"):
+        wanted = unquote(path[3:])
+        for item in items:
+            if item["path"].name == wanted:
+                return 200, "".join(document([item], limit, back="/"))
+        return 404, '<p>That session is no longer listed. <a href="/">Back</a></p>'
+    return 404, '<p>Not found. <a href="/">Back</a></p>'
+
+
+def serve(candidates, limit, port, launch):
+    """Serve the picker on localhost until interrupted. Read-only, no uploads, no writes."""
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            status, body = route(self.path, candidates(), limit)
+            payload = body.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass  # The sessions are the output; request lines are noise.
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    address = f"http://127.0.0.1:{server.server_port}/"
+    print(f"{address}  (Ctrl-C to stop)")
+    print("Local server, local sessions. Do not expose this port.")
+    if launch:
+        webbrowser.open(address)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        server.server_close()
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path)
     parser.add_argument("--agent", choices=["claude", "codex", "both"], default="both")
     parser.add_argument("--project", type=Path, default=Path.cwd())
-    parser.add_argument("-n", type=int, default=3, help="Sessions per agent, newest first")
+    parser.add_argument("-n", type=int, default=None,
+                        help="Sessions per agent, newest first (3, or 20 when serving)")
     parser.add_argument("--largest", action="store_true",
                         help="Rank by file size instead of recency, as the report does")
     parser.add_argument("--list", action="store_true", dest="listing",
@@ -226,17 +335,31 @@ def main():
                         help="Show the candidates and open the one you answer with")
     parser.add_argument("--open", action="store_true", dest="launch",
                         help="Open the page in your browser when it is written")
+    parser.add_argument("--serve", action="store_true",
+                        help="Run a local picker that builds a session when you click it")
+    parser.add_argument("--port", type=int, default=0, help="Port for --serve; 0 picks a free one")
     parser.add_argument("--max-chars", type=int, default=4000,
                         help="Per-event text limit; 0 keeps every character")
     parser.add_argument("--output", type=Path,
                         default=Path(tempfile.gettempdir()) / "keyhole-view.html")
     args = parser.parse_args()
+    args.n = args.n if args.n is not None else (20 if args.serve else 3)
     if args.n < 1:
         parser.error("-n must be positive")
     if args.max_chars < 0:
         parser.error("--max-chars cannot be negative")
-    paths = args.paths or discover(project_root(args.project), args.agent, args.n,
-                                   order="size" if args.largest else "time")
+    root = project_root(args.project)
+    order = "size" if args.largest else "time"
+
+    def candidates():
+        found = args.paths or discover(root, args.agent, args.n, order=order)
+        return [describe(path) for path in found]
+
+    if args.serve:
+        if not candidates():
+            parser.exit(2, "No matching transcripts. Pass explicit JSONL files or --project.\n")
+        return serve(candidates, args.max_chars, args.port, args.launch)
+    paths = args.paths or discover(root, args.agent, args.n, order=order)
     if not paths:
         parser.exit(2, "No matching transcripts. Pass explicit JSONL files or --project.\n")
     try:

@@ -10,11 +10,16 @@ from this SKILL.md's real location (two parent directories), not from a guessed
 CLAUDE_PLUGIN_ROOT variable in the shell.
 
 ~~~bash
+python3 "<plugin-root>/tools/view.py" --serve --project "<repository>"   # picker, stays running
 python3 "<plugin-root>/tools/view.py" --project "<repository>" --list
 python3 "<plugin-root>/tools/view.py" --project "<repository>" --agent both
 python3 "<plugin-root>/tools/view.py" "<session.jsonl>" --max-chars 0
 python3 "<plugin-root>/tools/view.py" --project "<repository>" -n 1 --open
 ~~~
+
+`--serve` is for the person, not for you: start it in the background, hand over the
+printed URL, and say it stops with Ctrl-C. It blocks until then, so never run it in the
+foreground of a turn. The file modes are what you use when you need a page on disk.
 
 Use the actual project path. Discovery selects the three newest sessions per agent;
 `-n` changes how many, `--largest` ranks by size the way the report does, and explicit
