@@ -1,8 +1,8 @@
 # keyhole
 
 Context discipline for **Claude Code and Codex**. Narrow expensive tool output,
-keep small task state outside the transcript, and measure what actually entered
-the conversation. Everything runs locally: no model calls or external service.
+keep small task state outside the transcript, measure what actually entered the
+conversation, and read a finished session back. Everything runs locally: no model calls or external service.
 
 ## Install / update
 
@@ -67,6 +67,34 @@ not a stable API; unsupported records cannot be measured as tool calls.
 
 Save a baseline, then compare comparable completed tasks after enabling the guard.
 Do not claim a percentage improvement from a syntactic match count.
+
+## Read a session
+
+The report says what a session cost. This says what happened in it. `view.py` turns
+Claude and Codex journals into one offline HTML page: prompts, thinking, tool calls
+and their output in order, for either host.
+
+~~~bash
+python3 plugins/keyhole/tools/view.py --project /path/to/repo --agent both
+python3 plugins/keyhole/tools/view.py /path/to/session.jsonl --max-chars 0
+~~~
+
+The page has checkboxes per event kind, a text filter with a match count, folded long
+bodies and a dark theme. It is a single file with no scripts from anywhere else and no
+network use. Without `--output` it is written to the system temporary directory and the
+path is printed.
+
+It also shows what the interface does not: Claude hook output, MCP server status and
+compaction notices, and the Codex developer messages that carry sandbox permissions.
+Images are a marker, never base64. `--max-chars` clips each event at 4000 characters by
+default, because an 80 MB journal renders into a page no browser enjoys.
+
+Every record is either an event or counted in the closing "records not shown" line.
+This is the local journal, not the wire: the system prompt, the tool definitions and
+the cache points are not in these files.
+
+**The page contains the full text of everything the agent read, including secrets that
+reached tool output.** It stays on your machine: do not upload, attach or commit it.
 
 ## What the guard checks
 
@@ -162,8 +190,8 @@ claude plugin validate ./plugins/keyhole
 ~~~
 
 Tests cover the original 38 Claude contracts, Codex event shapes, shared config,
-CUA frames, both transcript formats, cumulative usage, partial records, state
-isolation and compatibility. They do not simulate a model or assert a savings rate.
+CUA frames, both transcript formats, cumulative usage, partial records, event
+extraction, page escaping, state isolation and compatibility. They do not simulate a model or assert a savings rate.
 
 ## Background
 

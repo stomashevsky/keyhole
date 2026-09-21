@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import load_config
 from hooks.guard import evaluate
+import transcripts
 
 def module(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -22,6 +23,7 @@ def module(name, path):
 
 report = module("keyhole_report", ROOT / "tools/report.py")
 state = module("keyhole_state", ROOT / "tools/state.py")
+view = module("keyhole_view", ROOT / "tools/view.py")
 
 
 class Fixture(unittest.TestCase):
@@ -251,6 +253,79 @@ class StateTests(Fixture):
         output=json.loads(r.stdout)["hookSpecificOutput"]
         self.assertEqual(output["hookEventName"],"SessionStart")
         self.assertIn("session-a.md",output["additionalContext"])
+
+
+class EventTests(Fixture):
+    def test_claude_blocks_become_ordered_events_and_never_base64(self):
+        image={"type":"image","source":{"data":"A"*100000}}
+        records=[
+            {"uuid":"a","cwd":str(self.project),"message":{"role":"assistant","model":"opus",
+             "content":[{"type":"thinking","thinking":"weigh it"},
+                        {"type":"tool_use","id":"c","name":"Bash","input":{"command":"npm test"}}]}},
+            {"uuid":"b","message":{"role":"user","content":[
+                {"type":"tool_result","tool_use_id":"c","content":[{"type":"text","text":"ok"},image]}]}},
+            {"uuid":"d","type":"attachment","attachment":{"type":"hook_event","stdout":"guard ran"}},
+            {"uuid":"e","type":"system","subtype":"compact_boundary","content":"Conversation compacted"},
+            {"uuid":"f","type":"mode","mode":"auto"},
+        ]
+        events=list(transcripts.events(self.jsonl(records)))
+        self.assertEqual([e.kind for e in events[:5]],
+                         ["thinking","tool_use","tool_result","system","system"])
+        self.assertEqual((events[1].tool,events[1].call_id),("Bash","c"))
+        self.assertEqual((events[2].call_id,events[2].images),("c",1))
+        self.assertIn("guard ran",events[3].text)
+        self.assertIn("compacted",events[4].text)
+        self.assertNotIn("A"*200,"".join(e.text for e in events))
+        self.assertTrue(events[-1].text.startswith("1 records not shown"))
+
+    def test_codex_items_keep_namespace_order_and_deduplicate(self):
+        def item(value):return {"type":"response_item","payload":value}
+        records=[
+            {"type":"session_meta","payload":{"cwd":str(self.project),"originator":"cli"}},
+            item({"type":"message","role":"user","content":[{"type":"input_text","text":"go"}]}),
+            item({"type":"reasoning","id":"r1","summary":[{"type":"summary_text","text":"plan"}]}),
+            item({"type":"function_call","id":"f1","name":"exec_command","namespace":"functions",
+                  "call_id":"c1","arguments":json.dumps({"cmd":"rg needle src"})}),
+            item({"type":"function_call_output","id":"o1","call_id":"c1","output":"found"}),
+            item({"type":"function_call_output","id":"o1","call_id":"c1","output":"found"}),
+            {"type":"event_msg","payload":{"type":"token_count","info":{}}},
+        ]
+        events=list(transcripts.events(self.jsonl(records)))
+        self.assertEqual([e.kind for e in events[:5]],
+                         ["meta","user","thinking","tool_use","tool_result"])
+        self.assertEqual(events[3].tool,"functions.exec_command")
+        self.assertIn("rg needle src",events[3].text)
+        self.assertEqual(events[-1].text.split()[0],"2")
+
+    def test_host_truncation_notice_reaches_the_reader(self):
+        records=[{"uuid":"a","message":{"role":"user","content":[
+            {"type":"tool_result","tool_use_id":"c","content":"head\n... Output truncated ..."}]}}]
+        self.assertTrue(list(transcripts.events(self.jsonl(records)))[0].truncated)
+
+    def test_agent_is_named_from_metadata_only(self):
+        claude=self.jsonl([{"uuid":"a","message":{"role":"user","content":"hi"}}],self.home/"c.jsonl")
+        codex=self.jsonl([{"type":"session_meta","payload":{"cwd":"/x"}}],self.home/"x.jsonl")
+        self.assertEqual(transcripts.transcript_agent(claude),"claude")
+        self.assertEqual(transcripts.transcript_agent(codex),"codex")
+        self.assertEqual(transcripts.transcript_agent(self.jsonl([{"other":1}],self.home/"u.jsonl")),
+                         "unknown")
+
+
+class ViewTests(Fixture):
+    def test_page_escapes_transcript_text_and_clips_long_bodies(self):
+        records=[{"uuid":"a","message":{"role":"user","content":"<script>alert(1)</script>"+"x"*5000}}]
+        page="".join(view.document([self.jsonl(records)],200))
+        self.assertIn("&lt;script&gt;alert(1)",page)
+        self.assertNotIn("<script>alert(1)",page)
+        self.assertEqual(page.count("<script>"),1)
+        self.assertIn("chars omitted",page)
+        self.assertNotIn("x"*1000,page)
+
+    def test_unlimited_view_keeps_every_character(self):
+        page="".join(view.document([self.jsonl([{"uuid":"a","message":{
+            "role":"user","content":"y"*5000}}])],0))
+        self.assertIn("y"*5000,page)
+        self.assertNotIn("chars omitted",page)
 
 
 if __name__ == "__main__":
