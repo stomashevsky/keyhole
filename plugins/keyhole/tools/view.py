@@ -84,7 +84,6 @@ button { cursor:pointer; padding:5px 10px; border-radius:var(--radius-sm);
 nav ol { margin:14px 0 0; padding-left:20px; color:var(--dim); }
 nav a { color:inherit; }
 .prompt { margin:2px 0 0; }
-.back { display:inline-block; margin-right:10px; }
 .src { color:var(--dim); font-size:12px; word-break:break-all; }
 .ev { border-left:3px solid var(--line); background:var(--card);
   border-radius:0 var(--radius-sm) var(--radius-sm) 0;
@@ -234,17 +233,15 @@ def session_html(item, limit):
     yield f'<p class="stats">{html.escape(summary)} &middot; {chars:,} chars of text</p>\n'
 
 
-def document(items, limit, back=None):
-    """One page of sessions. `back` means the picker frames this page: it already carries the
-    warning and the list, so neither is repeated here and the header stays one line."""
-    title = html.escape(items[0]["prompt"][:80]) or "Session" if back else "Keyhole session view"
+def document(items, limit, framed=False):
+    """One page of sessions. Framed means the picker holds this page beside its list, which
+    already carries the warning and the names, so the header keeps only what is missing."""
+    title = html.escape(items[0]["prompt"][:80]) or "Session" if framed else "Keyhole session view"
     yield ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n"
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
            f"<title>Keyhole: {len(items)} sessions</title>\n<style>{STYLE}</style>\n"
-           "</head><body>\n<header><h1>"
-           + (f'<a class="back" href="{back}" target="_top">&larr; sessions</a>' if back else "")
-           + title + "</h1>\n")
-    if not back:
+           f"</head><body>\n<header><h1>{title}</h1>\n")
+    if not framed:
         yield ('<p class="warn">Everything the agent read and wrote is on this page, including '
                "secrets that appeared in tool output. It is a local file: keep it local.</p>\n")
     yield '<div class="filters">'
@@ -254,7 +251,7 @@ def document(items, limit, back=None):
     yield ('<input type="search" id="q" placeholder="filter text">'
            '<button id="expand">expand all</button><button id="collapse">collapse all</button>'
            '<span id="count"></span></div></header>\n')
-    if not back:
+    if not framed:
         yield "<nav><ol>"
         for number, item in enumerate(items):
             label = " &middot; ".join(html.escape(part) for part in
@@ -298,7 +295,7 @@ def route(path, items, limit):
         wanted = unquote(path[3:])
         for item in items:
             if item["path"].name == wanted:
-                return 200, "".join(document([item], limit, back="/"))
+                return 200, "".join(document([item], limit, framed=True))
         return 404, '<p>That session is no longer listed. <a href="/">Back</a></p>'
     return 404, '<p>Not found. <a href="/">Back</a></p>'
 

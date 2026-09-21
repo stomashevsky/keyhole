@@ -386,8 +386,8 @@ class ViewTests(Fixture):
         self.assertIn("<iframe",body)
         status,body=view.route(f"/s/{path.name}",items,200)
         self.assertEqual(status,200)
-        self.assertIn("&larr; sessions",body)
-        self.assertNotIn("<nav>",body)  # the picker holds the list; the frame does not repeat it
+        self.assertNotIn("&larr;",body)  # the picker holds the list; the frame adds no way back
+        self.assertNotIn("<nav>",body)
         for unknown in ("/s/../../etc/passwd","/s/%2e%2e%2fsecrets.jsonl","/s/absent.jsonl","/x"):
             self.assertEqual(view.route(unknown,items,200)[0],404,unknown)
 
