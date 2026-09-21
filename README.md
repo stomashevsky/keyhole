@@ -79,6 +79,10 @@ python3 plugins/keyhole/tools/view.py --project /path/to/repo -n 1 --output ~/se
 open ~/session.html
 ~~~
 
+That takes the newest session for the repository. To see what else is there, run it with
+`--list` first: it prints the candidates with their date, size and opening line, and you
+pass back the path of the one you want.
+
 Open it in a real browser. An editor or chat preview shows the file as a snapshot, so
 the text is there but the buttons do nothing. On the page, the checkboxes at the top
 hide the kinds of events you are not after, the box beside them filters by text and
@@ -89,9 +93,16 @@ Claude and Codex journals into one offline HTML page: prompts, thinking, tool ca
 and their output in order, for either host.
 
 ~~~bash
+python3 plugins/keyhole/tools/view.py --project /path/to/repo --list
 python3 plugins/keyhole/tools/view.py --project /path/to/repo --agent both
 python3 plugins/keyhole/tools/view.py /path/to/session.jsonl --max-chars 0
 ~~~
+
+`--project` decides which sessions count: those whose working directory sits under that
+path, in either host's journals. `-n` takes that many per agent, newest first; `--largest`
+ranks by size the way the report does; `--list` prints the candidates instead of building
+a page. A session is named by the first thing you typed in it, or by the slash command you
+ran, both in the listing and in the page's index.
 
 The page has checkboxes per event kind, a text filter with a match count, folded long
 bodies and a dark theme. It is a single file with no scripts from anywhere else and no

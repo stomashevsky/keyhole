@@ -10,15 +10,19 @@ from this SKILL.md's real location (two parent directories), not from a guessed
 CLAUDE_PLUGIN_ROOT variable in the shell.
 
 ~~~bash
+python3 "<plugin-root>/tools/view.py" --project "<repository>" --list
 python3 "<plugin-root>/tools/view.py" --project "<repository>" --agent both
 python3 "<plugin-root>/tools/view.py" "<session.jsonl>" --max-chars 0
-python3 "<plugin-root>/tools/view.py" --project "<repository>" -n 1 --output /tmp/keyhole-view.html
 ~~~
 
-Use the actual project path. Default discovery selects the largest three sessions
-per agent; explicit JSONL files are useful for exported or older transcripts. The
-page goes to the system temporary directory unless `--output` says otherwise, and
-the command prints where it landed.
+Use the actual project path. Discovery selects the three newest sessions per agent;
+`-n` changes how many, `--largest` ranks by size the way the report does, and explicit
+JSONL files are useful for exported or older transcripts. The page goes to the system
+temporary directory unless `--output` says otherwise, and the command prints where it landed.
+
+When the person has not named a session, run `--list` first and show them the candidates
+with their date, size and opening line, rather than guessing which one they meant. A
+session is named by the first thing they typed in it, or by the slash command they ran.
 
 The page carries the full text of everything the agent read and wrote, including
 secrets that reached tool output. Keep it local: do not upload it, attach it to an

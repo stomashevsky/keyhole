@@ -247,7 +247,7 @@ def transcript_cwd(path):
     return None
 
 
-def discover(root, agent, limit, home=None):
+def discover(root, agent, limit, home=None, order="size"):
     codex_home = Path(home) / ".codex" if home is not None else Path(
         os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
     home = Path(home or Path.home())
@@ -275,8 +275,9 @@ def discover(root, agent, limit, home=None):
         elif name == "codex":
             continue
         selected[name].append(path)
+    rank = (lambda p: p.stat().st_mtime) if order == "time" else (lambda p: p.stat().st_size)
     return [p for files in selected.values()
-            for p in sorted(files, key=lambda p: p.stat().st_size, reverse=True)[:limit]]
+            for p in sorted(files, key=rank, reverse=True)[:limit]]
 
 
 @dataclass
@@ -502,3 +503,41 @@ def events(path):
     yield Event(index, agent, "meta",
                 text=f"{skipped} records not shown: duplicates, host mirrors, empty or "
                      "malformed records, and record types this reader does not model.")
+
+
+# Wrappers a host writes around a prompt: useful to the model, noise when naming a session.
+NOISE = re.compile(r"<(system-reminder|command-[a-z-]+|local-command-[a-z-]+|environment_context"
+                   r"|user_instructions)>.*?</\1>", re.S)
+COMMAND = re.compile(r"<command-name>([^<]+)</command-name>")
+PLACEHOLDER = re.compile(r"^\[(image|external unsupported block:[^\]]*)\]$")
+SKILL_BODY = "Base directory for this skill:"
+
+
+def first_prompt(path, limit=200):
+    """A line that names the session: what the person typed first, or the command they ran.
+
+    A slash command arrives as a wrapper record followed by its expansion, and the
+    expansion is the skill's own text rather than anything the person wrote.
+    """
+    command, expansion = "", False
+    for index, event in enumerate(events(path)):
+        if index >= limit:
+            break
+        if event.kind != "user" or not event.text:
+            continue
+        found = COMMAND.search(event.text)
+        if found:
+            command = command or found.group(1).strip()
+            expansion = True
+            continue
+        if expansion:
+            expansion = False
+            continue
+        for line in NOISE.sub("", event.text).splitlines():
+            line = line.strip()
+            if not line or line.startswith("<") or PLACEHOLDER.match(line):
+                continue
+            if line.startswith(SKILL_BODY):
+                break
+            return line
+    return command

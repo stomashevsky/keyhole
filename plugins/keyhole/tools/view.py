@@ -2,6 +2,7 @@
 """Read local Claude/Codex sessions as an offline HTML timeline. No network, no dependencies."""
 
 import argparse
+from datetime import datetime
 import html
 from pathlib import Path
 import sys
@@ -9,7 +10,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import project_root
-from transcripts import discover, events, transcript_agent, transcript_cwd
+from transcripts import discover, events, first_prompt, transcript_agent, transcript_cwd
 
 KINDS = ["user", "assistant", "thinking", "tool_use", "tool_result", "system", "meta"]
 FOLD = 800  # Longer bodies open on demand rather than filling the page.
@@ -35,6 +36,7 @@ button { cursor:pointer; padding:5px 10px; border-radius:6px; border:1px solid v
   background:var(--card); color:inherit; font:inherit; }
 nav ol { margin:14px 0 0; padding-left:20px; color:var(--dim); }
 nav a { color:inherit; }
+.prompt { margin:2px 0 0; }
 .src { color:var(--dim); font-size:12px; word-break:break-all; }
 .ev { border-left:3px solid var(--line); background:var(--card); border-radius:0 6px 6px 0;
   margin:6px 0; padding:6px 10px; }
@@ -121,18 +123,53 @@ def event_html(event, limit):
             f'<div class="hd">{"".join(head)}</div>{body(event.text, limit)}</article>\n')
 
 
-def session_html(path, limit):
-    """Stream one session: header first, counts last, so nothing is held in memory twice."""
-    agent = transcript_agent(path)
-    cwd = transcript_cwd(path) or "unknown"
+def short(path):
+    """A path with the home directory folded back to ~, for reading and for copying."""
+    home = str(Path.home())
+    text = str(path)
+    return "~" + text[len(home):] if text.startswith(home) else text
+
+
+def bytes_label(count):
+    for unit in ("B", "K", "M", "G"):
+        if count < 1024 or unit == "G":
+            return f"{count:.0f}{unit}" if unit == "B" else f"{count:.1f}{unit}"
+        count /= 1024
+
+
+def describe(path):
+    """What the listing and the page need before reading a session end to end."""
+    path = Path(path)
     try:
-        bytes_on_disk = Path(path).stat().st_size
+        status = path.stat()
+        moment = datetime.fromtimestamp(status.st_mtime).strftime("%Y-%m-%d %H:%M")
+        size = status.st_size
     except OSError:
-        bytes_on_disk = 0
-    yield (f"<h2>{html.escape(agent)} &middot; {html.escape(cwd)}</h2>"
-           f'<p class="src">{html.escape(str(path))} &middot; {bytes_on_disk:,} bytes</p>\n')
+        moment, size = "", 0
+    return {"path": path, "agent": transcript_agent(path), "cwd": transcript_cwd(path) or "unknown",
+            "when": moment, "bytes": size, "prompt": first_prompt(path)}
+
+
+def listing(items, limit):
+    """Candidate sessions, newest first, each with the path to pass back in."""
+    lines = []
+    for number, item in enumerate(items, start=1):
+        lines.append(f'{number:3}  {item["agent"]:7} {item["when"]:16} '
+                     f'{bytes_label(item["bytes"]):>7}  {item["prompt"][:60]}')
+        lines.append(f'     {short(item["path"])}')
+    lines.append(f"\n{limit} per agent, newest first. Pass -n for more, or a path to open one.")
+    return "\n".join(lines) + "\n"
+
+
+def session_html(item, limit):
+    """Stream one session: header first, counts last, so nothing is held in memory twice."""
+    yield f'<h2>{html.escape(item["agent"])} &middot; {html.escape(item["when"])}</h2>\n'
+    if item["prompt"]:
+        yield f'<p class="prompt">{html.escape(item["prompt"][:200])}</p>\n'
+    yield (f'<p class="src">{html.escape(item["cwd"])} &middot; {html.escape(short(item["path"]))}'
+           f' &middot; {item["bytes"]:,} bytes</p>\n')
     counts, chars = {}, 0
-    for event in events(path):
+    for event in events(item["path"]):
         counts[event.kind] = counts.get(event.kind, 0) + 1
         chars += len(event.text)
         yield event_html(event, limit)
@@ -140,10 +177,10 @@ def session_html(path, limit):
     yield f'<p class="stats">{html.escape(summary)} &middot; {chars:,} chars of text</p>\n'
 
 
-def document(paths, limit):
+def document(items, limit):
     yield ("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n"
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-           f"<title>Keyhole: {len(paths)} sessions</title>\n<style>{STYLE}</style>\n"
+           f"<title>Keyhole: {len(items)} sessions</title>\n<style>{STYLE}</style>\n"
            "</head><body>\n<header><h1>Keyhole session view</h1>\n"
            '<p class="warn">Everything the agent read and wrote is on this page, including '
            "secrets that appeared in tool output. It is a local file: keep it local.</p>\n"
@@ -154,12 +191,14 @@ def document(paths, limit):
     yield ('<input type="search" id="q" placeholder="filter text">'
            '<button id="expand">expand all</button><button id="collapse">collapse all</button>'
            '<span id="count"></span></div></header>\n<nav><ol>')
-    for number, path in enumerate(paths):
-        yield f'<li><a href="#s{number}">{html.escape(Path(path).name)}</a></li>'
+    for number, item in enumerate(items):
+        label = " &middot; ".join(html.escape(part) for part in
+                                  (item["agent"], item["when"], item["prompt"][:70]) if part)
+        yield f'<li><a href="#s{number}">{label}</a></li>'
     yield "</ol></nav>\n<main>\n"
-    for number, path in enumerate(paths):
+    for number, item in enumerate(items):
         yield f'<section id="s{number}">\n'
-        yield from session_html(path, limit)
+        yield from session_html(item, limit)
         yield "</section>\n"
     yield f"</main>\n<script>{SCRIPT}</script>\n</body></html>\n"
 
@@ -169,7 +208,11 @@ def main():
     parser.add_argument("paths", nargs="*", type=Path)
     parser.add_argument("--agent", choices=["claude", "codex", "both"], default="both")
     parser.add_argument("--project", type=Path, default=Path.cwd())
-    parser.add_argument("-n", type=int, default=3, help="Largest sessions per agent")
+    parser.add_argument("-n", type=int, default=3, help="Sessions per agent, newest first")
+    parser.add_argument("--largest", action="store_true",
+                        help="Rank by file size instead of recency, as the report does")
+    parser.add_argument("--list", action="store_true", dest="listing",
+                        help="Print the candidate sessions instead of building a page")
     parser.add_argument("--max-chars", type=int, default=4000,
                         help="Per-event text limit; 0 keeps every character")
     parser.add_argument("--output", type=Path,
@@ -179,17 +222,21 @@ def main():
         parser.error("-n must be positive")
     if args.max_chars < 0:
         parser.error("--max-chars cannot be negative")
-    paths = args.paths or discover(project_root(args.project), args.agent, args.n)
+    paths = args.paths or discover(project_root(args.project), args.agent, args.n,
+                                   order="size" if args.largest else "time")
     if not paths:
         parser.exit(2, "No matching transcripts. Pass explicit JSONL files or --project.\n")
     try:
+        items = [describe(path) for path in paths]
+        if args.listing:
+            print(listing(items, args.n), end="")
+            return 0
         with args.output.open("w", encoding="utf-8") as handle:
-            for chunk in document(paths, args.max_chars):
+            for chunk in document(items, args.max_chars):
                 handle.write(chunk)
     except OSError as exc:
-        parser.exit(2, f"Cannot write the view: {exc}\n")
-    written = args.output.stat().st_size
-    print(f"{args.output} ({written:,} bytes, {len(paths)} sessions)")
+        parser.exit(2, f"Cannot read the sessions: {exc}\n")
+    print(f"{args.output} ({args.output.stat().st_size:,} bytes, {len(items)} sessions)")
     print("Local file with full transcript text. Do not share or commit it.")
     return 0
 

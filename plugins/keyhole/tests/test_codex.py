@@ -311,10 +311,36 @@ class EventTests(Fixture):
                          "unknown")
 
 
+    def test_sessions_can_be_ranked_by_time_or_size(self):
+        folder=self.home/".codex/sessions/2026/09/21"
+        big=self.jsonl([{"type":"session_meta","payload":{"cwd":str(self.project)}},
+                        {"type":"response_item","payload":{"type":"message","role":"user",
+                         "content":[{"type":"input_text","text":"x"*500}]}}],folder/"big.jsonl")
+        fresh=self.jsonl([{"type":"session_meta","payload":{"cwd":str(self.project)}}],
+                         folder/"fresh.jsonl")
+        os.utime(big,(1,1))
+        self.assertEqual(transcripts.discover(self.project,"codex",1,self.home),[big])
+        self.assertEqual(transcripts.discover(self.project,"codex",1,self.home,order="time"),[fresh])
+
+    def test_session_is_named_by_the_prompt_or_by_the_command(self):
+        typed=[{"uuid":"a","message":{"role":"user","content":
+                "<system-reminder>ignore me</system-reminder>\nчто сломалось в сборке"}}]
+        self.assertEqual(transcripts.first_prompt(self.jsonl(typed,self.home/"a.jsonl")),
+                         "что сломалось в сборке")
+        slashed=[{"uuid":"a","message":{"role":"user","content":
+                  "<command-message>e2ee</command-message>\n<command-name>/e2ee</command-name>"}},
+                 {"uuid":"b","message":{"role":"user","content":
+                  "Base directory for this skill: /x\n\n# Skill body, not a prompt"}}]
+        self.assertEqual(transcripts.first_prompt(self.jsonl(slashed,self.home/"b.jsonl")),"/e2ee")
+        image=[{"uuid":"a","message":{"role":"user","content":"[image]\nсмотри скриншот"}}]
+        self.assertEqual(transcripts.first_prompt(self.jsonl(image,self.home/"c.jsonl")),
+                         "смотри скриншот")
+
+
 class ViewTests(Fixture):
     def test_page_escapes_transcript_text_and_clips_long_bodies(self):
         records=[{"uuid":"a","message":{"role":"user","content":"<script>alert(1)</script>"+"x"*5000}}]
-        page="".join(view.document([self.jsonl(records)],200))
+        page="".join(view.document([view.describe(self.jsonl(records))],200))
         self.assertIn("&lt;script&gt;alert(1)",page)
         self.assertNotIn("<script>alert(1)",page)
         self.assertEqual(page.count("<script>"),1)
@@ -322,10 +348,24 @@ class ViewTests(Fixture):
         self.assertNotIn("x"*1000,page)
 
     def test_unlimited_view_keeps_every_character(self):
-        page="".join(view.document([self.jsonl([{"uuid":"a","message":{
-            "role":"user","content":"y"*5000}}])],0))
+        page="".join(view.document([view.describe(self.jsonl([{"uuid":"a","message":{
+            "role":"user","content":"y"*5000}}]))],0))
         self.assertIn("y"*5000,page)
         self.assertNotIn("chars omitted",page)
+
+
+    def test_listing_names_each_session_and_repeats_its_path(self):
+        path=self.jsonl([{"uuid":"a","message":{"role":"user","content":"проверь сборку"}}])
+        text=view.listing([view.describe(path)],3)
+        self.assertIn("проверь сборку",text)
+        self.assertIn(view.short(path),text)
+        self.assertIn("newest first",text)
+
+    def test_page_index_names_sessions_by_prompt_not_by_file(self):
+        path=self.jsonl([{"uuid":"a","message":{"role":"user","content":"почини тесты"}}])
+        page="".join(view.document([view.describe(path)],200))
+        self.assertIn('<a href="#s0">',page)
+        self.assertIn("почини тесты",page)
 
 
 if __name__ == "__main__":
