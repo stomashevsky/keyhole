@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "keyhole",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Shared context discipline for Claude Code and Codex.",
   "owner": {
     "name": "Sergey Tomashevsky"
@@ -10,7 +10,7 @@
     {
       "name": "keyhole",
       "description": "Local context guard, shared task state, and Claude/Codex transcript reports.",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "author": {
         "name": "Sergey Tomashevsky"
       },
