@@ -22,7 +22,8 @@ aside { width:300px; flex:none; height:100vh; overflow:auto; border-right:1px so
   background:var(--card); padding:10px 10px 24px; }
 aside h1 { font-size:13px; margin:2px 2px 8px; color:var(--dim); font-weight:600; }
 aside input[type=search] { width:100%; margin:0 0 8px; }
-.row { display:block; padding:6px 8px; border-radius:6px; text-decoration:none; color:inherit;
+.row { display:block; padding:6px 8px; border-radius:var(--radius-sm); text-decoration:none;
+  color:inherit;
   cursor:pointer; }
 .row:hover { background:var(--bg); }
 .row.on { background:var(--bg); box-shadow:inset 2px 0 0 var(--accent); }
@@ -51,13 +52,22 @@ KINDS = ["user", "assistant", "thinking", "tool_use", "tool_result", "system", "
 FOLD = 800  # Longer bodies open on demand rather than filling the page.
 
 STYLE = """
+/* Plex UI tokens (github.com/plex-ui/ui), resolved to plain values. Same palette, radii
+   and type stack; no npm package, no webfont, no request, so the page stays one file. */
 :root { color-scheme: light dark;
-  --bg:#fbfbfa; --fg:#1a1a18; --dim:#6b6b66; --line:#e2e0da; --card:#fff; --accent:#8b6f47; }
+  --radius-sm:0.375rem;
+  --font-sans: ui-sans-serif, -apple-system, system-ui, "Segoe UI", "Noto Sans", "Helvetica",
+    "Arial", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", "Menlo", "Monaco", "Consolas",
+    "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace;
+  --bg:#ffffff; --fg:#0d0d0d; --dim:#5d5d5d; --line:rgba(13,13,13,.10); --card:#f9f9f9;
+  --accent:#0169cc; --green:#00a240; --violet:#8046d9; --orange:#e25507; }
 @media (prefers-color-scheme: dark) { :root {
-  --bg:#17171a; --fg:#e8e6e3; --dim:#9a978f; --line:#2e2e33; --card:#1e1e22; --accent:#c8a876; } }
+  --bg:#212121; --fg:#ffffff; --dim:#afafaf; --line:rgba(255,255,255,.12); --card:#181818;
+  --accent:#0285ff; --green:#04b84c; --violet:#924ff7; --orange:#fb6a22; } }
 * { box-sizing: border-box; }
 body { margin:0; padding:0 16px 64px; background:var(--bg); color:var(--fg);
-  font:14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
+  font:14px/1.5 var(--font-sans); }
 header { position:sticky; top:0; z-index:2; background:var(--bg); padding:16px 0 10px;
   border-bottom:1px solid var(--line); }
 h1 { font-size:16px; margin:0 0 6px; }
@@ -65,27 +75,30 @@ h2 { font-size:14px; margin:28px 0 2px; }
 .warn { margin:0 0 10px; color:var(--dim); max-width:80ch; }
 .filters { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; }
 .filters label { cursor:pointer; user-select:none; }
-input[type=search] { flex:1 1 220px; min-width:180px; padding:5px 8px; border-radius:6px;
+input[type=search] { flex:1 1 220px; min-width:180px; padding:5px 8px;
+  border-radius:var(--radius-sm);
   border:1px solid var(--line); background:var(--card); color:inherit; font:inherit; }
-button { cursor:pointer; padding:5px 10px; border-radius:6px; border:1px solid var(--line);
+button { cursor:pointer; padding:5px 10px; border-radius:var(--radius-sm);
+  border:1px solid var(--line);
   background:var(--card); color:inherit; font:inherit; }
 nav ol { margin:14px 0 0; padding-left:20px; color:var(--dim); }
 nav a { color:inherit; }
 .prompt { margin:2px 0 0; }
 .back { display:inline-block; margin-right:10px; }
 .src { color:var(--dim); font-size:12px; word-break:break-all; }
-.ev { border-left:3px solid var(--line); background:var(--card); border-radius:0 6px 6px 0;
+.ev { border-left:3px solid var(--line); background:var(--card);
+  border-radius:0 var(--radius-sm) var(--radius-sm) 0;
   margin:6px 0; padding:6px 10px; }
 .ev[data-kind=user] { border-left-color:var(--accent); }
-.ev[data-kind=assistant] { border-left-color:#5b8c76; }
-.ev[data-kind=thinking] { border-left-color:#7d7aa8; }
-.ev[data-kind=tool_use] { border-left-color:#c38a4a; }
-.ev[data-kind=tool_result] { border-left-color:#4a7fa8; }
+.ev[data-kind=assistant] { border-left-color:var(--green); }
+.ev[data-kind=thinking] { border-left-color:var(--violet); }
+.ev[data-kind=tool_use] { border-left-color:var(--orange); }
+.ev[data-kind=tool_result] { border-left-color:var(--dim); }
 .hd { display:flex; flex-wrap:wrap; gap:8px; align-items:baseline; color:var(--dim); font-size:12px; }
 .chip { font-weight:600; color:var(--fg); }
-.tool { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--fg); }
+.tool { font-family:var(--font-mono); color:var(--fg); }
 pre { margin:4px 0 0; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
-  font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  font:12px/1.5 var(--font-mono); }
 summary { cursor:pointer; color:var(--dim); font-size:12px; }
 .stats { color:var(--dim); font-size:12px; margin:8px 0 0; }
 """

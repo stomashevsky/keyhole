@@ -123,6 +123,9 @@ typed in it, or by the slash command you ran, in the listing and on the page.
 every load, so a session you are running right now appears in the list and grows as you
 reload it. It serves only the sessions it discovered, by name, and writes nothing.
 
+Colors, radii and the type stack are Plex UI's tokens (github.com/plex-ui/ui) written
+out as plain values, so the page matches that design system without installing it.
+
 The page has checkboxes per event kind, a text filter with a match count, folded long
 bodies and a dark theme. It is a single file with no scripts from anywhere else and no
 network use. Without `--output` it is written to the system temporary directory and the
