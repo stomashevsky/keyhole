@@ -7,6 +7,7 @@ import html
 from pathlib import Path
 import sys
 import tempfile
+import webbrowser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import project_root
@@ -161,6 +162,14 @@ def listing(items, limit):
     return "\n".join(lines) + "\n"
 
 
+def choose(items, answer):
+    """Turn what the person typed at the picker into one session, or say what was wrong."""
+    answer = (answer or "").strip() or "1"
+    if not answer.isdigit() or not 1 <= int(answer) <= len(items):
+        raise ValueError(f"Pick a number between 1 and {len(items)}.")
+    return items[int(answer) - 1]
+
+
 def session_html(item, limit):
     """Stream one session: header first, counts last, so nothing is held in memory twice."""
     yield f'<h2>{html.escape(item["agent"])} &middot; {html.escape(item["when"])}</h2>\n'
@@ -213,6 +222,10 @@ def main():
                         help="Rank by file size instead of recency, as the report does")
     parser.add_argument("--list", action="store_true", dest="listing",
                         help="Print the candidate sessions instead of building a page")
+    parser.add_argument("--pick", action="store_true",
+                        help="Show the candidates and open the one you answer with")
+    parser.add_argument("--open", action="store_true", dest="launch",
+                        help="Open the page in your browser when it is written")
     parser.add_argument("--max-chars", type=int, default=4000,
                         help="Per-event text limit; 0 keeps every character")
     parser.add_argument("--output", type=Path,
@@ -231,6 +244,14 @@ def main():
         if args.listing:
             print(listing(items, args.n), end="")
             return 0
+        if args.pick and len(items) > 1:
+            print(listing(items, args.n), end="")
+            try:
+                items = [choose(items, input("Open which one? [1] "))]
+            except ValueError as exc:
+                parser.exit(2, f"{exc}\n")
+            except (EOFError, KeyboardInterrupt):
+                parser.exit(1, "\nNothing opened.\n")
         with args.output.open("w", encoding="utf-8") as handle:
             for chunk in document(items, args.max_chars):
                 handle.write(chunk)
@@ -238,6 +259,8 @@ def main():
         parser.exit(2, f"Cannot read the sessions: {exc}\n")
     print(f"{args.output} ({args.output.stat().st_size:,} bytes, {len(items)} sessions)")
     print("Local file with full transcript text. Do not share or commit it.")
+    if args.launch:
+        webbrowser.open(args.output.resolve().as_uri())
     return 0
 
 

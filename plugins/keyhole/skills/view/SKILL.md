@@ -13,12 +13,17 @@ CLAUDE_PLUGIN_ROOT variable in the shell.
 python3 "<plugin-root>/tools/view.py" --project "<repository>" --list
 python3 "<plugin-root>/tools/view.py" --project "<repository>" --agent both
 python3 "<plugin-root>/tools/view.py" "<session.jsonl>" --max-chars 0
+python3 "<plugin-root>/tools/view.py" --project "<repository>" -n 1 --open
 ~~~
 
 Use the actual project path. Discovery selects the three newest sessions per agent;
 `-n` changes how many, `--largest` ranks by size the way the report does, and explicit
 JSONL files are useful for exported or older transcripts. The page goes to the system
 temporary directory unless `--output` says otherwise, and the command prints where it landed.
+
+Pass `--open` when the person is at this machine and asked to see a session: the page
+opens in their browser and they have nothing to copy. Leave it off when you are only
+preparing a file for later.
 
 When the person has not named a session, run `--list` first and show them the candidates
 with their date, size and opening line, rather than guessing which one they meant. A

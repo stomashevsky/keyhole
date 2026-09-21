@@ -361,6 +361,14 @@ class ViewTests(Fixture):
         self.assertIn(view.short(path),text)
         self.assertIn("newest first",text)
 
+    def test_picker_takes_a_number_and_defaults_to_the_newest(self):
+        items=[{"path":"a"},{"path":"b"}]
+        self.assertEqual(view.choose(items,"2"),items[1])
+        self.assertEqual(view.choose(items,""),items[0])
+        self.assertEqual(view.choose(items,None),items[0])
+        for bad in ["0","3","x","-1"]:
+            with self.assertRaises(ValueError):view.choose(items,bad)
+
     def test_page_index_names_sessions_by_prompt_not_by_file(self):
         path=self.jsonl([{"uuid":"a","message":{"role":"user","content":"почини тесты"}}])
         page="".join(view.document([view.describe(path)],200))

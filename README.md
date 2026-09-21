@@ -79,9 +79,15 @@ python3 plugins/keyhole/tools/view.py --project /path/to/repo -n 1 --output ~/se
 open ~/session.html
 ~~~
 
-That takes the newest session for the repository. To see what else is there, run it with
-`--list` first: it prints the candidates with their date, size and opening line, and you
-pass back the path of the one you want.
+That takes the newest session for the repository. If you will do this more than once, put
+a function in your shell profile and it becomes one word in any repository:
+
+~~~zsh
+kh() { python3 /path/to/keyhole/plugins/keyhole/tools/view.py --pick --open --project "${1:-$PWD}"; }
+~~~
+
+`kh` lists the recent sessions for the repository you are standing in, waits for a number,
+and opens that one in your browser. Nothing to copy, nothing to paste.
 
 Open it in a real browser. An editor or chat preview shows the file as a snapshot, so
 the text is there but the buttons do nothing. On the page, the checkboxes at the top
@@ -101,7 +107,8 @@ python3 plugins/keyhole/tools/view.py /path/to/session.jsonl --max-chars 0
 `--project` decides which sessions count: those whose working directory sits under that
 path, in either host's journals. `-n` takes that many per agent, newest first; `--largest`
 ranks by size the way the report does; `--list` prints the candidates instead of building
-a page. A session is named by the first thing you typed in it, or by the slash command you
+a page; `--pick` prints them and opens the one you answer with; `--open` launches the
+finished page in your browser. A session is named by the first thing you typed in it, or by the slash command you
 ran, both in the listing and in the page's index.
 
 The page has checkboxes per event kind, a text filter with a match count, folded long
